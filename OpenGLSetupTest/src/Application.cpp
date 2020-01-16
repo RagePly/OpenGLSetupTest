@@ -1,7 +1,65 @@
 #include <GL/glew.h>
 #include <GLFW/glfw3.h>
 #include <iostream>
+#include <fstream> //filestream library for opening files
+#include <string> //for the get line function
+#include <sstream>
 
+#define DONE std::cout << "Done" << std::endl;
+#define ASSERT(x) if (!(x)) __debugbreak()
+#define GLCall(x) GLClearError();\
+	x;\
+	ASSERT(GLLogCall(#x, __FILE__,__LINE__))
+
+//this can't be used inside a if statement
+ //# turns x into a char* 
+
+static void GLClearError() {
+	while (glGetError() != GL_NO_ERROR);
+}
+
+static bool GLLogCall(const char* function, const char* file, int line) {
+	while (GLenum error = glGetError()) { //will run as long as error is not equal to 0, which it will be if GL_NO_ERROR is the next error poll
+		std::cout << "[OpenGL Error] (" << error << "):" << function << " " << file << ":" << line << std::endl;
+		return false;
+	}
+	return true;
+}
+
+struct ShaderProgramSource
+{
+	std::string VertexSource;
+	std::string FragmentSource;
+};
+
+static ShaderProgramSource parseShader(const std::string& filePath) {
+	std::ifstream stream(filePath);
+
+	enum class ShaderType {
+		NONE = -1, VERTEX = 0, FRAGMENT = 1 
+	};
+
+	std::stringstream ss[2];
+	std::string line;
+	ShaderType type = ShaderType::NONE; //Woa
+	while (getline(stream, line)) {
+		if (line.find("#shader") != std::string::npos) {
+			if (line.find("vertex") != std::string::npos) {
+				//set mode to vertex
+				type = ShaderType::VERTEX;
+			}
+			else if (line.find("fragment") != std::string::npos) {
+				//set mode to fragment
+				type = ShaderType::FRAGMENT;
+			}
+		}
+		else {
+			ss[(int)type] << line << '\n'; //the type enum class works as an index. We concatonate each line
+		}
+	}
+
+	return { ss[(int)ShaderType::VERTEX].str(), ss[(int)ShaderType::FRAGMENT].str() };
+}
 
 static unsigned int CompileShader( unsigned int type, const std::string& source ) {
 	unsigned int id = glCreateShader(type);
@@ -55,7 +113,7 @@ int main(void)
 	std::cout << "Initializing the GLFW library...";
 	if (!glfwInit())
 		return -1;
-	std::cout << "Done" << std::endl;
+	DONE
 
 	/* Create a windowed mode window and its OpenGL context */
 	std::cout << "Creating Window...";
@@ -65,34 +123,37 @@ int main(void)
 		glfwTerminate();
 		return -1;
 	}
-	std::cout << "Done" << std::endl;
+	DONE
 
 	/* Make the window's context current */
 	std::cout << "Creating valid OpenGL rendering context...";
 	glfwMakeContextCurrent(window);
-	std::cout << "Done" << std::endl;
+	DONE
 
 	/* The above created a valid openGL rendering contex, which allows us to initialize glew */
 	std::cout << "Initializing GLEW...";
 	if (glewInit() == GLEW_OK) {
-		std::cout << "Done" << std::endl;
+		DONE
 	}
 
-	float positions[6] = { //the initialization is different to how i usually do it, but it is still a pointer
-		-0.5f, -0.5f,
-		 0.0f, 0.5f,
-		 0.5f, -0.5f
+	float positions[] = { //the initialization is different to how i usually do it, but it is still a pointer
+		-0.5f, -0.5f, //0
+		 0.5f, -0.5f, //1
+		 0.5f,  0.5f, //2
+		-0.5f,   0.5, //3
 	};
 
+	unsigned int indices[]{ //could use smaller values like short int or char. But when the models are big, youd need a lot of indecies
+		0,1,2, //first triangle
+		2,3,0  // second triangle
+	};
 
 	unsigned int buffer; //the id of the buffer created. 
-
-
 
 	//Defining vertex buffer
 	glGenBuffers(1, &buffer); //one buffer, it writes the id to the integer address
 	glBindBuffer(GL_ARRAY_BUFFER, buffer); //it is now bound, we will now work on it (it is now the active buffer)
-	glBufferData(GL_ARRAY_BUFFER, 6 * sizeof(float),positions,GL_STATIC_DRAW); //the buffer is now given the data (it is copied over from the ram to the video-ram)
+	glBufferData(GL_ARRAY_BUFFER, 4 * 2 * sizeof(float),positions,GL_STATIC_DRAW); //the buffer is now given the data (it is copied over from the ram to the video-ram)
 	//attributes means i.e position, color, normal...
 	//index are to the vertecies
 	//type is the type of data, ie float. 
@@ -118,26 +179,19 @@ int main(void)
 	...
 	
 	*/
+	
+	unsigned int ibo; //index buffer object
+	glGenBuffers(1, &ibo);
+	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ibo);
+	glBufferData(GL_ELEMENT_ARRAY_BUFFER, 2 * 3 * sizeof(unsigned int), indices, GL_STATIC_DRAW);
 
-	std::string vertexShader = //run for each vertex
-		"#version 330 core\n" //c++ concatonates if you put strings next (only whitespace) to each other 
-		"\n"
-		"layout(location = 0) in vec4 position;" //layout(location = 0) references the attribute at index 0, which in our case is 2d position. then setting it to vec4 position. in stands for input
-		"void main()\n"
-		"{\n"
-		" gl_Position = position;\n" //gl_position is a vec4, thats why we converted it before since we in the attribute assignment defined the attributes as having two components (a vec2)
-		"}\n";
+	ShaderProgramSource source = parseShader("res/shaders/Basic.shader"); //the file path is relative to the debugging directory (found under project properties), which has both src and res
+	std::cout << "FRAGMENT" << std::endl;
+	std::cout << source.FragmentSource << std::endl;
+	std::cout << "VERTEX" << std::endl;
+	std::cout << source.VertexSource << std::endl;
 
-	std::string fragmentShader = 
-		"#version 330 core\n" //c++ concatonates if you put strings next (only whitespace) to each other 
-		"\n"
-		"layout(location = 0) out vec4 color;" //layout(location = 0) references the attribute at index 0, which in our case is 2d position. then setting it to vec4 position (so "attributes is in variable position which is of type vec4")
-		"void main()\n"
-		"{\n"
-		" color = vec4(1.0,0.0,0.0,1.0);\n" //gl_position is a vec4, thats why we converted it before since we in the attribute assignment defined the attributes as having two components (a vec2)
-		"}\n";
-
-	unsigned int shader = CreateShader(vertexShader, fragmentShader);
+	unsigned int shader = CreateShader(source.VertexSource, source.FragmentSource);
 	glUseProgram(shader);
 
 	std::cout << "OpenGL version: " << glGetString(GL_VERSION) << std::endl;
@@ -147,8 +201,10 @@ int main(void)
 		/* Render here */
 		glClear(GL_COLOR_BUFFER_BIT);
 
-		glDrawArrays(GL_TRIANGLES, 0, 3);
-
+	
+		//glDrawArrays(GL_TRIANGLES, 0, 6); //this is my interpretation, since we've bound a vertex buffer, when we issue a draw-call, we are using that one buffer. 
+		GLCall(glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, nullptr)); //nullptr because we just bound the buffer
+		
 		/* Swap front and back buffers */
 		glfwSwapBuffers(window);
 
@@ -156,8 +212,12 @@ int main(void)
 		glfwPollEvents();
 	}
 
+	std::cout << "Deleting program...";
+	glDeleteProgram(shader);
+	DONE
+
 	std::cout << "Terminating Window...";
 	glfwTerminate();
-	std::cout << "Done" << std::endl;
+	DONE
 	return 0;
 }

@@ -1,0 +1,9 @@
+Fuck man
+
+the way i understand things:
+
+every step of the pipeline has a buffer
+so vertex-array-buffer is one, and we can bind a buffer we created to it (which will then be active when we issue a drawcall
+
+the makeContextCurrent function is the function that ensures that wha twe write in the file is outputed on the window.
+each thread can only have one context, so when i set the different pointers from the main thread, openGL knows that it's the current threads buffers and programs im editing
