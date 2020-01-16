@@ -91,13 +91,13 @@ static unsigned int CreateShader(const std::string& vertexShader, const std::str
 	unsigned int vs = CompileShader(GL_VERTEX_SHADER, vertexShader);
 	unsigned int fs = CompileShader(GL_FRAGMENT_SHADER, fragmentShader);
 
-	glAttachShader(program, vs);
-	glAttachShader(program, fs);
-	glLinkProgram(program); 
-	glValidateProgram(program); //Actually validates the program, and returns a state sort of
+	GLCall(glAttachShader(program, vs));
+	GLCall(glAttachShader(program, fs));
+	GLCall(glLinkProgram(program)); 
+	GLCall(glValidateProgram(program)); //Actually validates the program, and returns a state sort of
 
-	glDeleteShader(vs); //delete intermediate shaders, since we have now successfully linked the program we attached them to
-	glDeleteShader(fs);
+	GLCall(glDeleteShader(vs)); //delete intermediate shaders, since we have now successfully linked the program we attached them to
+	GLCall(glDeleteShader(fs));
 
 	return program;
 }
@@ -129,6 +129,8 @@ int main(void)
 	std::cout << "Creating valid OpenGL rendering context...";
 	glfwMakeContextCurrent(window);
 	DONE
+		
+	glfwSwapInterval(1);
 
 	/* The above created a valid openGL rendering contex, which allows us to initialize glew */
 	std::cout << "Initializing GLEW...";
@@ -192,7 +194,16 @@ int main(void)
 	std::cout << source.VertexSource << std::endl;
 
 	unsigned int shader = CreateShader(source.VertexSource, source.FragmentSource);
-	glUseProgram(shader);
+	GLCall(glUseProgram(shader));
+	//the uniform has to be set after the shader is bound, so that the following code knows where to send the data
+
+	int location = glGetUniformLocation(shader, "u_Color");
+	ASSERT(location != -1); //however, openGL will throw away a uniform that isn't used, so crashing the program might not be ideal every time
+	
+
+	//^ steps above. Bind a shader program, get the location of a uniform in the program, send info to that uniform in the same format as the uniform
+	float r = 0.0f;
+	float increment = 0.05f;
 
 	std::cout << "OpenGL version: " << glGetString(GL_VERSION) << std::endl;
 	/* Loop until the user closes the window */
@@ -201,10 +212,17 @@ int main(void)
 		/* Render here */
 		glClear(GL_COLOR_BUFFER_BIT);
 
-	
+		glUniform4f(location,r, 0.3f, 0.8f, 1.0f);
 		//glDrawArrays(GL_TRIANGLES, 0, 6); //this is my interpretation, since we've bound a vertex buffer, when we issue a draw-call, we are using that one buffer. 
 		GLCall(glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, nullptr)); //nullptr because we just bound the buffer
 		
+		if (r > 1.0f)
+			increment = -0.05f;
+		else if (r < 0.0)
+			increment = 0.05f;
+
+		r += increment;
+
 		/* Swap front and back buffers */
 		glfwSwapBuffers(window);
 
